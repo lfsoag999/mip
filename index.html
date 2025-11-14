@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento Agro MT</title>
+    <meta name="theme-color" content="#064e3b">
+    <link rel="manifest" href="manifest.json">
+    <!-- Tailwind CSS (Estilo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js (Lógica) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- jsPDF (Gerar PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        /* Ajuste para Alto Contraste no Sol */
+        body { background-color: #022c22; color: #ecfccb; } /* Verde muito escuro + Verde Limão claro */
+        select, input { background-color: #064e3b; color: white; border: 1px solid #34d399; }
+        select:focus, input:focus { outline: 2px solid #34d399; }
+        .btn-action { background-color: #166534; color: white; }
+    </style>
+</head>
+<body class="font-sans pb-20">
+
+<div id="app" class="max-w-md mx-auto p-4">
+    
+    <!-- Cabeçalho -->
+    <header class="mb-6 text-center border-b border-green-700 pb-4">
+        <h1 class="text-2xl font-bold text-green-400 uppercase tracking-wider">Monitoramento MT</h1>
+        <p class="text-xs text-green-200 mt-1">Geração de Relatório Offline</p>
+    </header>
+
+    <!-- Campos Obrigatórios -->
+    <section class="space-y-4 mb-8">
+        <div>
+            <label class="block text-sm font-bold mb-1 text-green-300">Técnico Responsável</label>
+            <input v-model="form.tecnico" type="text" class="w-full p-3 rounded uppercase" placeholder="Nome do Técnico">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-bold mb-1 text-green-300">Data</label>
+                <input v-model="form.data" type="date" :max="today" class="w-full p-3 rounded">
+            </div>
+            <div>
+                <label class="block text-sm font-bold mb-1 text-green-300">Talhão</label>
+                <input v-model="form.talhao" type="text" class="w-full p-3 rounded" placeholder="Ex: jai.01">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-bold mb-1 text-green-300">Cultura</label>
+                <select v-model="form.cultura" @change="resetItems" class="w-full p-3 rounded">
+                    <option value="Soja">Soja</option>
+                    <option value="Milho">Milho</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-bold mb-1 text-green-300">Pontos Coletados</label>
+                <input v-model.number="form.pontos" type="number" class="w-full p-3 rounded" placeholder="0">
+            </div>
+        </div>
+    </section>
+
+    <!-- Botão Adicionar -->
+    <div class="flex justify-between items-center mb-4 border-t border-green-700 pt-4">
+        <h2 class="text-xl font-bold text-green-400">Ocorrências</h2>
+        <button @click="addItem" class="bg-green-500 text-black font-bold py-2 px-4 rounded-full text-2xl shadow-lg active:bg-green-400 hover:bg-green-400 transition">+</button>
+    </div>
+
+    <!-- Lista Dinâmica -->
+    <div class="space-y-6">
+        <div v-for="(item, index) in items" :key="index" class="bg-green-900 border border-green-700 p-4 rounded-lg shadow-md relative">
+            
+            <button @click="removeItem(index)" class="absolute top-2 right-2 text-red-400 font-bold text-xl p-2">×</button>
+
+            <!-- A. Tipo -->
+            <div class="mb-3 pr-8">
+                <label class="block text-xs text-green-300">Categoria</label>
+                <select v-model="item.tipo" class="w-full p-2 rounded mt-1">
+                    <option value="Praga">Praga</option>
+                    <option value="Doença">Doença</option>
+                    <option value="Daninha">Daninha</option>
+                </select>
+            </div>
+
+            <!-- B. Nome (Lista Dependente) -->
+            <div class="mb-3" v-if="item.tipo">
+                <label class="block text-xs text-green-300">Identificação</label>
+                <select v-model="item.nome" class="w-full p-2 rounded mt-1">
+                    <option v-for="nome in getList(item.tipo)" :value="nome">{{ nome }}</option>
+                </select>
+            </div>
+
+            <!-- C. Condicionais -->
+            <div v-if="item.nome" class="bg-green-800 p-3 rounded mt-2 border border-green-700">
+                
+                <!-- Lógica PRAGA -->
+                <div v-if="item.tipo === 'Praga'">
+                    <!-- Oviposição (Para todas as pragas) -->
+                    <div class="flex items-center mb-3">
+                        <input type="checkbox" v-model="item.oviposicao" :id="'ovi'+index" class="w-5 h-5 mr-2 accent-green-500">
+                        <label :for="'ovi'+index" class="font-bold text-white">Presença de Oviposição</label>
+                    </div>
+
+                    <!-- Mosca Branca -->
+                    <div v-if="isMoscaBranca(item.nome)">
+                        <label class="block text-xs text-green-300">Nível de Infestação</label>
+                        <select v-model="item.nivel" class="w-full p-2 rounded mt-1">
+                            <option>Baixo</option><option>Médio</option><option>Alto</option>
+                        </select>
+                    </div>
+
+                    <!-- Percevejo -->
+                    <div v-else-if="isPercevejo(item.nome)">
+                        <label class="block text-xs text-green-300">Fase</label>
+                        <select v-model="item.fase" class="w-full p-2 rounded mt-1">
+                            <option>Ninfa</option><option>Adulto</option>
+                        </select>
+                    </div>
+
+                    <!-- Outras Pragas -->
+                    <div v-else class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-green-300">Qtd.</label>
+                            <input v-model.number="item.qtd" type="number" class="w-full p-2 rounded mt-1">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-green-300">Tamanho</label>
+                            <select v-model="item.tamanho" class="w-full p-2 rounded mt-1">
+                                <option>Pequena</option><option>Média</option><option>Grande</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lógica DOENÇA ou DANINHA -->
+                <div v-if="item.tipo === 'Doença' || item.tipo === 'Daninha'">
+                    <label class="block text-xs text-green-300">Nível de Infestação</label>
+                    <select v-model="item.nivel" class="w-full p-2 rounded mt-1">
+                        <option>Baixo</option><option>Médio</option><option>Alto</option>
+                    </select>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Botão Gerar PDF -->
+    <div class="fixed bottom-0 left-0 w-full p-4 bg-green-950 border-t border-green-800">
+        <button @click="generatePDF" class="w-full bg-white text-green-900 font-bold py-4 rounded shadow-xl text-lg uppercase tracking-widest hover:bg-gray-200 transition">
+            Gerar Relatório PDF
+        </button>
+    </div>
+
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+    data() {
+        return {
+            today: new Date().toISOString().split('T')[0],
+            form: {
+                tecnico: '',
+                data: new Date().toISOString().split('T')[0],
+                talhao: '',
+                cultura: 'Soja',
+                pontos: null
+            },
+            items: [],
+            // BASES DE DADOS (MT)
+            lists: {
+                Soja: {
+                    Praga: [
+                        "Percevejo-marrom (Euschistus heros)", "Percevejo-verde (Piezodorus guildinii)", "Percevejo-barriga-verde (Dichelops)", 
+                        "Mosca-branca (Bemisia tabaci)", "Falsa-medideira (C. includens)", "Lagarta-da-soja (A. gemmatalis)", 
+                        "Lagarta-do-cartucho (S. frugiperda)", "Helicoverpa armigera", "Lagarta-do-velvet", "Lagarta-elasmo", 
+                        "Bicudo-da-soja", "Cascudinho", "Ácaro-rajado", "Tripes", "Cigarrinha-verde", "Corós", 
+                        "Percevejo-castanho", "Tamanduá-da-raiz", "Torrãozinho", "Vaquinha-verde-amarela"
+                    ],
+                    Doença: [
+                        "Ferrugem-asiática", "Mancha-alvo", "Mancha-parda", "Crestamento (Cercospora)", "Antracnose", 
+                        "Cancro-da-haste", "Mofo-branco", "Oídio", "Mancha-olho-de-rã", "Míldio", "Podridão-vermelha", 
+                        "Podridão-vagens", "Nematoide-cisto", "Nematoide-galhas", "Nematoide-lesões", "Fitóftora", 
+                        "Mancha-púrpura", "Haste-verde", "Podridão-carvão", "DFC (Complexo)"
+                    ],
+                    Daninha: [
+                        "Capim-amargoso", "Pé-de-galinha", "Buva", "Caruru", "Capim-marmelada", "Capim-colchão", 
+                        "Capim-carrapicho", "Trapoeraba", "Corda-de-viola", "Picão-preto", "Tiririca", "Erva-quente", 
+                        "Erva-santa-luzia", "Guanxuma", "Leiteiro", "Nabo", "Poaia-branca", "Falsa-serralha", "Braquiária", "Nabiça"
+                    ]
+                },
+                Milho: {
+                    Praga: [
+                        "Lagarta-do-cartucho", "Cigarrinha-do-milho", "Percevejo-barriga-verde", "Corós", "Lagarta-elasmo", 
+                        "Lagarta-rosca", "Cupins", "Percevejo-marrom", "Helicoverpa zea", "Pulgão-do-milho", "Larva-alfinete", 
+                        "Tripes", "Broca-da-cana", "Broca-do-colo", "Ácaro-vermelho", "Formigas-cortadeiras", 
+                        "Gorgulho (Pós)", "Traça (Pós)", "Percevejo-de-renda", "Percevejo-pequeno"
+                    ],
+                    Doença: [
+                        "Ferrugem-polissora", "Ferrugem-comum", "Ferrugem-tropical", "Cercosporiose", "Helmintosporiose (HT)", 
+                        "Mancha-branca", "Antracnose", "Enfezamento-pálido", "Enfezamento-vermelho", "Diplodia (Colmo)", 
+                        "Fusarium (Colmo/Raiz)", "Phaeosphaeria", "Gibberella (Espiga)", "Vírus-da-risca", 
+                        "Macrophomina", "Stenocarpella", "Míldio", "Carvão-comum", "Podridão-sementes", "Nematoides"
+                    ],
+                    Daninha: [
+                        "Capim-amargoso", "Pé-de-galinha", "Buva", "Caruru", "Capim-marmelada", "Capim-colchão", 
+                        "Capim-carrapicho", "Trapoeraba", "Corda-de-viola", "Picão-preto", "Tiririca", "Erva-quente", 
+                        "Erva-santa-luzia", "Guanxuma", "Leiteiro", "Nabo", "Poaia-branca", "Falsa-serralha", "Braquiária", "Nabiça"
+                    ]
+                }
+            }
+        }
+    },
+    methods: {
+        resetItems() { this.items = []; },
+        addItem() { this.items.push({ tipo: 'Praga', nome: '', qtd: '', tamanho: '', nivel: 'Baixo', fase: 'Ninfa', oviposicao: false }); },
+        removeItem(index) { this.items.splice(index, 1); },
+        getList(tipo) { return this.lists[this.form.cultura][tipo] || []; },
+        isMoscaBranca(nome) { return nome && nome.toLowerCase().includes('mosca-branca'); },
+        isPercevejo(nome) { return nome && nome.toLowerCase().includes('percevejo'); },
+        
+        generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Cabeçalho PDF
+            doc.setFillColor(22, 101, 52); // Verde Escuro
+            doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text("RELATÓRIO DE MONITORAMENTO", 105, 20, null, null, "center");
+            
+            // Dados do Relatório
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(12);
+            doc.text(`Técnico: ${this.form.tecnico}`, 14, 50);
+            doc.text(`Data: ${this.form.data.split('-').reverse().join('/')}`, 14, 58);
+            doc.text(`Talhão: ${this.form.talhao}`, 140, 50);
+            doc.text(`Cultura: ${this.form.cultura}`, 140, 58);
+            doc.text(`Pontos: ${this.form.pontos || 0}`, 14, 66);
+
+            // Tabela
+            const rows = this.items.map(item => {
+                let detalhes = "";
+                if (item.tipo === 'Praga') {
+                    let ovi = item.oviposicao ? "[OVIPOSIÇÃO: SIM]" : "";
+                    if (this.isMoscaBranca(item.nome)) detalhes = `Infestação: ${item.nivel} ${ovi}`;
+                    else if (this.isPercevejo(item.nome)) detalhes = `Fase: ${item.fase} ${ovi}`;
+                    else detalhes = `Qtd: ${item.qtd} | Tam: ${item.tamanho} ${ovi}`;
+                } else {
+                    detalhes = `Infestação: ${item.nivel}`;
+                }
+                return [item.tipo, item.nome, detalhes];
+            });
+
+            doc.autoTable({
+                startY: 75,
+                head: [['Categoria', 'Identificação', 'Detalhes / Contagem']],
+                body: rows,
+                headStyles: { fillColor: [22, 101, 52] },
+                theme: 'grid'
+            });
+
+            const fileName = `Relatorio_${this.form.cultura}_${this.form.talhao}_${this.form.data}.pdf`;
+            doc.save(fileName);
+        }
+    }
+}).mount('#app');
+
+// Registro do Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
