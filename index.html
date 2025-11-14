@@ -19,6 +19,7 @@
         body { background-color: #022c22; color: #ecfccb; } /* Verde muito escuro + Verde Limão claro */
         select, input { background-color: #064e3b; color: white; border: 1px solid #34d399; }
         select:focus, input:focus { outline: 2px solid #34d399; }
+        .is-invalid { border-color: #ef4444 !important; } /* Borda Vermelha para campos obrigatórios */
         .btn-action { background-color: #166534; color: white; }
     </style>
 </head>
@@ -35,37 +36,61 @@
     <!-- Campos Obrigatórios -->
     <section class="space-y-4 mb-8">
         <div>
-            <label class="block text-sm font-bold mb-1 text-green-300">Técnico Responsável</label>
-            <input v-model="form.tecnico" type="text" class="w-full p-3 rounded uppercase" placeholder="Nome do Técnico">
+            <label class="block text-sm font-bold mb-1 text-green-300">Técnico Responsável (Obrigatório)</label>
+            <!-- OBS: v-model.trim para remover espaços e .toUpperCase para garantir MAIÚSCULAS -->
+            <input v-model.trim="form.tecnico" @input="form.tecnico = form.tecnico.toUpperCase()" type="text" 
+                   class="w-full p-3 rounded uppercase" :class="{'is-invalid': errors.tecnico}" placeholder="Nome do Técnico">
         </div>
 
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-bold mb-1 text-green-300">Data</label>
-                <input v-model="form.data" type="date" :max="today" class="w-full p-3 rounded">
+                <label class="block text-sm font-bold mb-1 text-green-300">Data (Obrigatório)</label>
+                <input v-model="form.data" type="date" :max="today" 
+                       class="w-full p-3 rounded" :class="{'is-invalid': errors.data}">
             </div>
             <div>
-                <label class="block text-sm font-bold mb-1 text-green-300">Talhão</label>
-                <input v-model="form.talhao" type="text" class="w-full p-3 rounded" placeholder="Ex: jai.01">
+                <label class="block text-sm font-bold mb-1 text-green-300">Talhão (Obrigatório)</label>
+                <input v-model.trim="form.talhao" type="text" 
+                       class="w-full p-3 rounded" :class="{'is-invalid': errors.talhao}" placeholder="Ex: jai.01">
             </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-bold mb-1 text-green-300">Cultura</label>
-                <select v-model="form.cultura" @change="resetItems" class="w-full p-3 rounded">
+                <label class="block text-sm font-bold mb-1 text-green-300">Cultura (Obrigatório)</label>
+                <select v-model="form.cultura" @change="resetItems" 
+                        class="w-full p-3 rounded" :class="{'is-invalid': errors.cultura}">
+                    <option value="">Selecione</option>
                     <option value="Soja">Soja</option>
                     <option value="Milho">Milho</option>
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-bold mb-1 text-green-300">Pontos Coletados</label>
-                <input v-model.number="form.pontos" type="number" class="w-full p-3 rounded" placeholder="0">
+                <label class="block text-sm font-bold mb-1 text-green-300">Pontos Coletados (Obrigatório)</label>
+                <input v-model.number="form.pontos" type="number" 
+                       class="w-full p-3 rounded" :class="{'is-invalid': errors.pontos}" placeholder="0">
             </div>
         </div>
     </section>
 
-    <!-- Botão Adicionar -->
+    <!-- Seção de Fotos -->
+    <section class="mb-8 p-4 bg-green-900 border border-green-700 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold text-green-400 mb-3">Fotos (Máx: 5)</h2>
+        <input type="file" @change="handleFileUpload" accept="image/*" multiple 
+               class="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
+        <p class="text-xs text-green-300 mt-1">Limite: 5 fotos (Máx. 10MB cada)</p>
+
+        <!-- Pré-visualização das Fotos -->
+        <div class="mt-4 flex flex-wrap gap-2">
+            <div v-for="(file, index) in photoFiles" :key="index" class="relative w-24 h-24">
+                <img :src="file.url" class="w-full h-full object-cover rounded border border-green-500" alt="Pré-visualização da foto">
+                <button @click="removePhoto(index)" class="absolute top-[-5px] right-[-5px] bg-red-600 text-white rounded-full h-5 w-5 text-xs flex items-center justify-center font-bold">×</button>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- Botão Adicionar Item -->
     <div class="flex justify-between items-center mb-4 border-t border-green-700 pt-4">
         <h2 class="text-xl font-bold text-green-400">Ocorrências</h2>
         <button @click="addItem" class="bg-green-500 text-black font-bold py-2 px-4 rounded-full text-2xl shadow-lg active:bg-green-400 hover:bg-green-400 transition">+</button>
@@ -73,8 +98,8 @@
 
     <!-- Lista Dinâmica -->
     <div class="space-y-6">
+        <!-- V-FOR e Estrutura de Itens -->
         <div v-for="(item, index) in items" :key="index" class="bg-green-900 border border-green-700 p-4 rounded-lg shadow-md relative">
-            
             <button @click="removeItem(index)" class="absolute top-2 right-2 text-red-400 font-bold text-xl p-2">×</button>
 
             <!-- A. Tipo -->
@@ -165,15 +190,17 @@ createApp({
     data() {
         return {
             today: new Date().toISOString().split('T')[0],
+            errors: {}, // Objeto para controlar erros de validação
             form: {
                 tecnico: '',
                 data: new Date().toISOString().split('T')[0],
                 talhao: '',
-                cultura: 'Soja',
+                cultura: '', // Vazio para ser obrigatório
                 pontos: null
             },
             items: [],
-            // BASES DE DADOS (MT)
+            photoFiles: [], // Array para armazenar objetos { file: File, url: 'data:image/...' }
+            // BASES DE DADOS (MT) - LISTA COMPLETA
             lists: {
                 Soja: {
                     Praga: [
@@ -225,49 +252,142 @@ createApp({
         isMoscaBranca(nome) { return nome && nome.toLowerCase().includes('mosca-branca'); },
         isPercevejo(nome) { return nome && nome.toLowerCase().includes('percevejo'); },
         
+        // --- NOVO: Lógica de Upload de Fotos ---
+        handleFileUpload(event) {
+            const files = event.target.files;
+            const MAX_FILES = 5;
+            const MAX_SIZE_MB = 10;
+            const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+
+                if (this.photoFiles.length >= MAX_FILES) {
+                    alert(`Limite de ${MAX_FILES} fotos atingido.`);
+                    break;
+                }
+                
+                if (file.size > MAX_SIZE_BYTES) {
+                    alert(`O arquivo ${file.name} excede o limite de ${MAX_SIZE_MB}MB e será ignorado.`);
+                    continue;
+                }
+
+                // Cria URL para pré-visualização
+                const url = URL.createObjectURL(file);
+                this.photoFiles.push({ file: file, url: url });
+            }
+            // Limpa o input file para permitir upload do mesmo arquivo novamente
+            event.target.value = ''; 
+        },
+
+        removePhoto(index) {
+            URL.revokeObjectURL(this.photoFiles[index].url); // Libera memória
+            this.photoFiles.splice(index, 1);
+        },
+
+        // --- NOVO: Validação Obrigatória ---
+        validateForm() {
+            this.errors = {};
+            if (!this.form.tecnico) this.errors.tecnico = true;
+            if (!this.form.data) this.errors.data = true;
+            if (!this.form.talhao) this.errors.talhao = true;
+            if (!this.form.cultura) this.errors.cultura = true;
+            if (!this.form.pontos || this.form.pontos <= 0) this.errors.pontos = true;
+            
+            return Object.keys(this.errors).length === 0;
+        },
+
+        // --- NOVO: Geração de PDF com Fotos e Talhão no Nome ---
         generatePDF() {
+            if (!this.validateForm()) {
+                alert('Por favor, preencha todos os campos obrigatórios (marcados em vermelho).');
+                return;
+            }
+
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
+            const margin = 14;
+            let currentY = 50;
+            const pageWidth = doc.internal.pageSize.getWidth();
+
             // Cabeçalho PDF
-            doc.setFillColor(22, 101, 52); // Verde Escuro
-            doc.rect(0, 0, 210, 40, 'F');
+            doc.setFillColor(22, 101, 52); 
+            doc.rect(0, 0, pageWidth, 40, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(22);
-            doc.text("RELATÓRIO DE MONITORAMENTO", 105, 20, null, null, "center");
+            doc.text("RELATÓRIO DE MONITORAMENTO", pageWidth / 2, 20, null, null, "center");
             
             // Dados do Relatório
             doc.setTextColor(0, 0, 0);
             doc.setFontSize(12);
-            doc.text(`Técnico: ${this.form.tecnico}`, 14, 50);
-            doc.text(`Data: ${this.form.data.split('-').reverse().join('/')}`, 14, 58);
-            doc.text(`Talhão: ${this.form.talhao}`, 140, 50);
-            doc.text(`Cultura: ${this.form.cultura}`, 140, 58);
-            doc.text(`Pontos: ${this.form.pontos || 0}`, 14, 66);
+            // Uso de this.form.tecnico.toUpperCase() para garantir maiúsculas no PDF
+            doc.text(`Técnico: ${this.form.tecnico.toUpperCase()}`, margin, currentY); currentY += 8;
+            doc.text(`Data: ${this.form.data.split('-').reverse().join('/')}`, margin, currentY); currentY += 8;
+            doc.text(`Talhão: ${this.form.talhao}`, pageWidth / 2, currentY - 16);
+            doc.text(`Cultura: ${this.form.cultura}`, pageWidth / 2, currentY - 8);
+            doc.text(`Pontos: ${this.form.pontos || 0}`, margin, currentY); currentY += 10;
 
-            // Tabela
+
+            // Tabela de Ocorrências
             const rows = this.items.map(item => {
                 let detalhes = "";
                 if (item.tipo === 'Praga') {
-                    let ovi = item.oviposicao ? "[OVIPOSIÇÃO: SIM]" : "";
+                    let ovi = item.oviposicao ? "[OVIPOSIÇÃO: SIM]" : "[OVIPOSIÇÃO: NÃO]";
                     if (this.isMoscaBranca(item.nome)) detalhes = `Infestação: ${item.nivel} ${ovi}`;
                     else if (this.isPercevejo(item.nome)) detalhes = `Fase: ${item.fase} ${ovi}`;
-                    else detalhes = `Qtd: ${item.qtd} | Tam: ${item.tamanho} ${ovi}`;
+                    else detalhes = `Qtd: ${item.qtd || '-'} | Tam: ${item.tamanho || '-'} ${ovi}`;
                 } else {
-                    detalhes = `Infestação: ${item.nivel}`;
+                    detalhes = `Infestação: ${item.nivel || '-'}`;
                 }
                 return [item.tipo, item.nome, detalhes];
             });
 
             doc.autoTable({
-                startY: 75,
+                startY: currentY,
                 head: [['Categoria', 'Identificação', 'Detalhes / Contagem']],
                 body: rows,
                 headStyles: { fillColor: [22, 101, 52] },
-                theme: 'grid'
+                theme: 'grid',
+                didParseCell: (data) => {
+                    if (data.section === 'body') { data.cell.styles.fillColor = [240, 253, 244]; } // Fundo branco na tabela
+                },
+                didDrawPage: (data) => {
+                    currentY = data.cursor.y;
+                }
             });
+            currentY = doc.autoTable.previous.finalY + 10;
+            
+            // Inclusão de Fotos
+            if (this.photoFiles.length > 0) {
+                doc.addPage();
+                currentY = margin;
+                doc.setFontSize(16);
+                doc.setTextColor(22, 101, 52);
+                doc.text("ANEXO: FOTOS DO MONITORAMENTO", margin, currentY); currentY += 10;
+                
+                this.photoFiles.forEach((file, index) => {
+                    const img = new Image();
+                    img.src = file.url;
 
-            const fileName = `Relatorio_${this.form.cultura}_${this.form.talhao}_${this.form.data}.pdf`;
+                    const imgWidth = 80;
+                    const imgHeight = (img.height * imgWidth) / img.width;
+                    
+                    if (currentY + imgHeight > doc.internal.pageSize.getHeight() - margin) {
+                        doc.addPage();
+                        currentY = margin;
+                    }
+                    
+                    doc.addImage(img.src, 'JPEG', margin, currentY, imgWidth, imgHeight);
+                    currentY += imgHeight + 5;
+                });
+            }
+
+
+            // Nome do Arquivo PDF (Ajustado)
+            const talhaoSafe = this.form.talhao.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const dataSafe = this.form.data.split('-').reverse().join(''); // DDMMYYYY
+            const fileName = `Relatorio_${talhaoSafe}_${dataSafe}.pdf`;
+            
             doc.save(fileName);
         }
     }
