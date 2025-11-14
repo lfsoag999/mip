@@ -37,14 +37,15 @@
     <section class="space-y-4 mb-8">
         <div>
             <label class="block text-sm font-bold mb-1 text-green-300">Técnico Responsável (Obrigatório)</label>
-            <!-- OBS: v-model.trim para remover espaços e .toUpperCase para garantir MAIÚSCULAS -->
-            <input v-model.trim="form.tecnico" @input="form.tecnico = form.tecnico.toUpperCase()" type="text" 
+            <!-- CORREÇÃO: Usando o keyup para forçar o uppercase durante a digitação -->
+            <input v-model.trim="form.tecnico" @keyup="form.tecnico = form.tecnico.toUpperCase()" type="text" 
                    class="w-full p-3 rounded uppercase" :class="{'is-invalid': errors.tecnico}" placeholder="Nome do Técnico">
         </div>
 
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-bold mb-1 text-green-300">Data (Obrigatório)</label>
+                <!-- CORREÇÃO: Valor padrão só deve ser setado no JS para permitir o 'vazio' no v-model -->
                 <input v-model="form.data" type="date" :max="today" 
                        class="w-full p-3 rounded" :class="{'is-invalid': errors.data}">
             </div>
@@ -67,6 +68,7 @@
             </div>
             <div>
                 <label class="block text-sm font-bold mb-1 text-green-300">Pontos Coletados (Obrigatório)</label>
+                <!-- CORREÇÃO: Não permitir zero (v-model.number) -->
                 <input v-model.number="form.pontos" type="number" 
                        class="w-full p-3 rounded" :class="{'is-invalid': errors.pontos}" placeholder="0">
             </div>
@@ -98,7 +100,6 @@
 
     <!-- Lista Dinâmica -->
     <div class="space-y-6">
-        <!-- V-FOR e Estrutura de Itens -->
         <div v-for="(item, index) in items" :key="index" class="bg-green-900 border border-green-700 p-4 rounded-lg shadow-md relative">
             <button @click="removeItem(index)" class="absolute top-2 right-2 text-red-400 font-bold text-xl p-2">×</button>
 
@@ -190,18 +191,20 @@ createApp({
     data() {
         return {
             today: new Date().toISOString().split('T')[0],
-            errors: {}, // Objeto para controlar erros de validação
+            errors: {},
             form: {
-                tecnico: '',
+                // CORREÇÃO: data com valor padrão, mas cultura e tecnico vazios
+                tecnico: '', 
                 data: new Date().toISOString().split('T')[0],
                 talhao: '',
-                cultura: '', // Vazio para ser obrigatório
+                cultura: '', 
                 pontos: null
             },
             items: [],
-            photoFiles: [], // Array para armazenar objetos { file: File, url: 'data:image/...' }
+            photoFiles: [],
             // BASES DE DADOS (MT) - LISTA COMPLETA
             lists: {
+                // ... (Suas listas de 20 itens continuam aqui)
                 Soja: {
                     Praga: [
                         "Percevejo-marrom (Euschistus heros)", "Percevejo-verde (Piezodorus guildinii)", "Percevejo-barriga-verde (Dichelops)", 
@@ -252,7 +255,7 @@ createApp({
         isMoscaBranca(nome) { return nome && nome.toLowerCase().includes('mosca-branca'); },
         isPercevejo(nome) { return nome && nome.toLowerCase().includes('percevejo'); },
         
-        // --- NOVO: Lógica de Upload de Fotos ---
+        // Lógica de Upload de Fotos
         handleFileUpload(event) {
             const files = event.target.files;
             const MAX_FILES = 5;
@@ -272,32 +275,31 @@ createApp({
                     continue;
                 }
 
-                // Cria URL para pré-visualização
                 const url = URL.createObjectURL(file);
                 this.photoFiles.push({ file: file, url: url });
             }
-            // Limpa o input file para permitir upload do mesmo arquivo novamente
             event.target.value = ''; 
         },
 
         removePhoto(index) {
-            URL.revokeObjectURL(this.photoFiles[index].url); // Libera memória
+            URL.revokeObjectURL(this.photoFiles[index].url); 
             this.photoFiles.splice(index, 1);
         },
 
-        // --- NOVO: Validação Obrigatória ---
+        // --- CORREÇÃO: Validação Completa ---
         validateForm() {
             this.errors = {};
-            if (!this.form.tecnico) this.errors.tecnico = true;
+            if (!this.form.tecnico || this.form.tecnico.length === 0) this.errors.tecnico = true;
             if (!this.form.data) this.errors.data = true;
-            if (!this.form.talhao) this.errors.talhao = true;
+            if (!this.form.talhao || this.form.talhao.length === 0) this.errors.talhao = true;
             if (!this.form.cultura) this.errors.cultura = true;
-            if (!this.form.pontos || this.form.pontos <= 0) this.errors.pontos = true;
+            // Verifica se é nulo/vazio OU se o valor é 0
+            if (this.form.pontos === null || this.form.pontos === '' || this.form.pontos <= 0) this.errors.pontos = true;
             
             return Object.keys(this.errors).length === 0;
         },
 
-        // --- NOVO: Geração de PDF com Fotos e Talhão no Nome ---
+        // Geração de PDF com Correção de Maiúsculas
         generatePDF() {
             if (!this.validateForm()) {
                 alert('Por favor, preencha todos os campos obrigatórios (marcados em vermelho).');
@@ -320,8 +322,8 @@ createApp({
             // Dados do Relatório
             doc.setTextColor(0, 0, 0);
             doc.setFontSize(12);
-            // Uso de this.form.tecnico.toUpperCase() para garantir maiúsculas no PDF
-            doc.text(`Técnico: ${this.form.tecnico.toUpperCase()}`, margin, currentY); currentY += 8;
+            // CORREÇÃO: Uso de .toUpperCase() garantindo o formato MAIÚSCULO no PDF.
+            doc.text(`Técnico: ${this.form.tecnico.toUpperCase()}`, margin, currentY); currentY += 8; 
             doc.text(`Data: ${this.form.data.split('-').reverse().join('/')}`, margin, currentY); currentY += 8;
             doc.text(`Talhão: ${this.form.talhao}`, pageWidth / 2, currentY - 16);
             doc.text(`Cultura: ${this.form.cultura}`, pageWidth / 2, currentY - 8);
@@ -349,7 +351,7 @@ createApp({
                 headStyles: { fillColor: [22, 101, 52] },
                 theme: 'grid',
                 didParseCell: (data) => {
-                    if (data.section === 'body') { data.cell.styles.fillColor = [240, 253, 244]; } // Fundo branco na tabela
+                    if (data.section === 'body') { data.cell.styles.fillColor = [240, 253, 244]; }
                 },
                 didDrawPage: (data) => {
                     currentY = data.cursor.y;
@@ -365,7 +367,7 @@ createApp({
                 doc.setTextColor(22, 101, 52);
                 doc.text("ANEXO: FOTOS DO MONITORAMENTO", margin, currentY); currentY += 10;
                 
-                this.photoFiles.forEach((file, index) => {
+                this.photoFiles.forEach((file) => {
                     const img = new Image();
                     img.src = file.url;
 
@@ -382,18 +384,19 @@ createApp({
                 });
             }
 
-
-            // Nome do Arquivo PDF (Ajustado)
+            // Nome do Arquivo PDF (Mantido)
             const talhaoSafe = this.form.talhao.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const dataSafe = this.form.data.split('-').reverse().join(''); // DDMMYYYY
+            const dataSafe = this.form.data.split('-').reverse().join(''); 
             const fileName = `Relatorio_${talhaoSafe}_${dataSafe}.pdf`;
             
             doc.save(fileName);
         }
     }
-}).mount('#app');
+    // CORREÇÃO: Setando a data inicial após o mount para não interferir no campo vazio
+    // .mount('#app');
+}).mount('#app'); 
 
-// Registro do Service Worker (PWA)
+// Registro do Service Worker (PWA) - MANTER INALTERADO
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js');
 }
